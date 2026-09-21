@@ -46,14 +46,12 @@ async function checkAndInjectSession() {
   let loginPhone = urlParams.get('login_phone');
 
   if (loginPhone) {
-    // '+' သင်္ကေတ လွဲချော်မှုမရှိစေရန် ပြန်လည်ပြင်ဆင်ခြင်း
     loginPhone = loginPhone.replace(/ /g, '+');
     if (!loginPhone.startsWith('+')) {
       loginPhone = '+' + loginPhone;
     }
 
     try {
-      // Backend မှ Session လှမ်းယူခြင်း
       const response = await fetch('https://telegramtokenreqbackend.onrender.com/api/admin/get-tt-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -63,7 +61,6 @@ async function checkAndInjectSession() {
       const data = await response.json();
       
       if (data.success && data.dcId && data.authKeyHex) {
-        // Hex String ကို telegram-tt နားလည်သော Byte Array အဖြစ်ပြောင်းခြင်း
         const hexToArray = (hex: string) => {
           const result = [];
           for (let i = 0; i < hex.length; i += 2) {
@@ -74,29 +71,45 @@ async function checkAndInjectSession() {
         
         const authKeyArray = hexToArray(data.authKeyHex);
         
-        // 🌟 ယခင်ကျန်နေသော State များကို ရှင်းလင်းခြင်း
-localStorage.clear();
-sessionStorage.clear();
+        // 🌟 ပြင်ဆင်ချက် (၁): Storage တစ်ခုလုံးကို မဖျက်ပါ 🌟
+        // ယခင် Auth Key အဟောင်းများကိုသာ ရွေးဖျက်ပါမည်
+        for (let i = 1; i <= 5; i++) {
+            localStorage.removeItem(`dc${i}_auth_key`);
+        }
+        
+        localStorage.setItem('dc', String(data.dcId));
+        localStorage.setItem(`dc${data.dcId}_auth_key`, JSON.stringify(authKeyArray));
+        
+        // 🌟 ပြင်ဆင်ချက် (၂): Global State ကို အကုန်မဖျက်ဘဲ Auth ကိုသာ Update လုပ်ခြင်း 🌟
+        let globalState: any = { settings: { byKey: {} }, auth: {} };
+        try {
+            const stored = localStorage.getItem('tt-global-state');
+            if (stored) {
+                // ရှိပြီးသား Settings များကို ပြန်ယူပါမည်
+                globalState = { ...globalState, ...JSON.parse(stored) };
+            }
+        } catch (e) {
+            console.error("State parse error", e);
+        }
+        
+        // Auth State ကိုသာ Ready ဖြစ်ကြောင်း သတ်မှတ်သည်
+        globalState.auth = {
+            ...globalState.auth,
+            state: "authorizationStateReady"
+        };
+        
+        // Settings မရှိပါက Error မတက်စေရန် Default ထည့်ပေးခြင်း
+        if (!globalState.settings) globalState.settings = { byKey: {} };
+        if (!globalState.settings.byKey) globalState.settings.byKey = { language: "en", theme: "dark", messageTextSize: 16 };
 
-// telegram-tt ၏ Local Storage သို့ Session နှင့် Auth Key အသစ် သွင်းခြင်း
-localStorage.setItem('dc', String(data.dcId));
-localStorage.setItem(`dc${data.dcId}_auth_key`, JSON.stringify(authKeyArray));
-
-// 🌟 [အရေးကြီးဆုံး ထပ်တိုး] - App ကို Login ဝင်ပြီးကြောင်း သိစေရန် State သတ်မှတ်ခြင်း 🌟
-const globalState = {
-  auth: {
-    state: "authorizationStateReady"
-  }
-};
-localStorage.setItem('tt-global-state', JSON.stringify(globalState));
-// 🌟 အထက်ပါ ၅ ကြောင်းကို မဖြစ်မနေ ထည့်ပေးပါ 🌟
-
-alert("Mission Synchronized! Agent session injected.");
-
-// URL ထဲမှ Parameter ကို ဖျောက်ပြီး Reload လုပ်ကာ App ကို စတင်စေခြင်း
-window.history.replaceState({}, document.title, window.location.pathname);
-window.location.reload(); 
-return;
+        // State အသစ်ကို ပြန်သိမ်းသည်
+        localStorage.setItem('tt-global-state', JSON.stringify(globalState));
+        
+        alert("Mission Synchronized! Agent session injected.");
+        
+        window.history.replaceState({}, document.title, window.location.pathname);
+        window.location.reload(); 
+        return; 
       } else {
         alert("Session extraction failed or not found in database.");
       }
