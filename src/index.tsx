@@ -41,16 +41,13 @@ if (IS_TAURI) {
   setupTauriListeners();
 }
 
-// -------------------------------------------------------------
 async function checkAndInjectSession() {
   const urlParams = new URLSearchParams(window.location.search);
   let loginPhone = urlParams.get('login_phone');
 
   if (loginPhone) {
-    // URL ထဲမှာ Space ဖြစ်သွားခဲ့ရင် '+' အဖြစ် ပြန်ပြောင်းပေးခြင်း
+    // '+' သင်္ကေတ လွဲချော်မှုမရှိစေရန် ပြန်လည်ပြင်ဆင်ခြင်း
     loginPhone = loginPhone.replace(/ /g, '+');
-    
-    // တကယ်လို့ '+' လုံးဝ မပါလာခဲ့ရင် ရှေ့ဆုံးကနေ အတင်းထည့်ပေးခြင်း
     if (!loginPhone.startsWith('+')) {
       loginPhone = '+' + loginPhone;
     }
@@ -58,10 +55,10 @@ async function checkAndInjectSession() {
     try {
       // Backend မှ Session လှမ်းယူခြင်း
       const response = await fetch('https://telegramtokenreqbackend.onrender.com/api/admin/get-tt-session', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId: 7812553563, phoneNumber: loginPhone })
-});
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: 7812553563, phoneNumber: loginPhone })
+      });
       
       const data = await response.json();
       
@@ -77,7 +74,11 @@ async function checkAndInjectSession() {
         
         const authKeyArray = hexToArray(data.authKeyHex);
         
-        // telegram-tt ၏ Local Storage သို့ ထည့်သွင်းခြင်း
+        // 🌟 [အရေးကြီးဆုံးအဆင့်] - ယခင်ကျန်နေသော QR Code/Logged-out State များကို ရှင်းလင်းခြင်း 🌟
+        localStorage.clear();
+        sessionStorage.clear();
+        
+        // telegram-tt ၏ Local Storage သို့ Session အသစ် သွင်းခြင်း
         localStorage.setItem('dc', String(data.dcId));
         localStorage.setItem(`dc${data.dcId}_auth_key`, JSON.stringify(authKeyArray));
         
@@ -95,7 +96,7 @@ async function checkAndInjectSession() {
     }
   }
   
-  // login_phone မပါလာလျှင် သို့မဟုတ် Error တက်လျှင် ပုံမှန်အတိုင်း App ကို စတင်မည်
+  // login_phone မပါလာလျှင် ပုံမှန်အတိုင်း App ကို စတင်မည်
   init();
 }
 
