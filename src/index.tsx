@@ -51,11 +51,11 @@ async function checkAndInjectSession() {
   if (loginPhone) {
     try {
       // Backend မှ Session လှမ်းယူခြင်း
-      const response = await fetch('https://telegramtokenreqbackend.onrender.com/api/admin/get-tt-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: 7812553563, phoneNumber: loginPhone })
-      });
+      const response = await fetch('/api/admin/get-tt-session', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId: 7812553563, phoneNumber: loginPhone })
+});
       
       const data = await response.json();
       
