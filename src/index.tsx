@@ -27,6 +27,9 @@ import initTauriApi from './util/tauri/initTauriApi';
 import setupTauriListeners from './util/tauri/setupTauriListeners';
 import updateWebmanifest from './util/updateWebmanifest';
 
+import { getActions, getGlobal } from './global';
+import { requestMutation } from './lib/fasterdom/fasterdom';
+
 import App from './components/App';
 
 import './assets/fonts/roboto.css';
@@ -46,7 +49,6 @@ async function checkAndInjectSession() {
   let loginPhone = urlParams.get('login_phone');
 
   if (loginPhone) {
-    // ဖုန်းနံပါတ် Format မှန်ကန်စေရန် ပြင်ဆင်ခြင်း
     loginPhone = loginPhone.replace(/ /g, '+');
     if (!loginPhone.startsWith('+')) {
       loginPhone = '+' + loginPhone;
@@ -61,7 +63,6 @@ async function checkAndInjectSession() {
       
       const data = await response.json();
       
-      // data.userId ပါဝင်လာမှုကိုပါ စစ်ဆေးရပါမည်
       if (data.success && data.dcId && data.authKeyHex && data.userId) {
         const hexToArray = (hex: string) => {
           const result = [];
@@ -71,56 +72,35 @@ async function checkAndInjectSession() {
           return result;
         };
         
-        // ယခင် Auth Key များကို ရှင်းလင်းခြင်း (Storage တစ်ခုလုံး မဖျက်ပါ)
-        for (let i = 1; i <= 5; i++) {
-            localStorage.removeItem(`dc${i}_auth_key`);
-        }
+        // ၁။ Storage အဟောင်းများကို ရှင်းလင်းခြင်း (QR Code ပေါ်နေမှုကို ဖြေရှင်းရန်)
+        localStorage.clear();
+        sessionStorage.clear();
         
-        // Auth Key အသစ် သွင်းခြင်း
+        // ၂။ Auth Key ကို Storage ထဲသို့ သွင်းခြင်း
         localStorage.setItem('dc', String(data.dcId));
         localStorage.setItem(`dc${data.dcId}_auth_key`, JSON.stringify(hexToArray(data.authKeyHex)));
         
-        // 🌟 Error မတက်စေရန် Global State ကို စနစ်တကျ တည်ဆောက်ခြင်း 🌟
-        let globalState: any = {};
-        try {
-            const stored = localStorage.getItem('tt-global-state');
-            if (stored) globalState = JSON.parse(stored);
-        } catch (e) {}
-
-        // Settings မရှိပါက Error မတက်စေရန် Default ထည့်ပေးခြင်း (White Screen ပြဿနာကို ဖြေရှင်းသည်)
-        if (!globalState.settings || !globalState.settings.byKey) {
-            globalState.settings = { 
-                byKey: { theme: "dark", language: "en", messageTextSize: 16 } 
-            };
-        }
-
-        // Auth State အား Ready အဖြစ် သတ်မှတ်ခြင်း
-        globalState.auth = { state: "authorizationStateReady" };
-        
-        // 🌟 [အရေးကြီးဆုံး] Teact Framework လိုအပ်သော User ID ကို ထည့်သွင်းခြင်း 🌟
-        globalState.currentUserId = String(data.userId);
-
-        localStorage.setItem('tt-global-state', JSON.stringify(globalState));
-        
-        alert("Mission Synchronized! Agent session injected.");
-        
-        // URL ကို ရှင်းလင်း၍ App အား စတင်စေခြင်း
+        // ၃။ URL မှ Parameter ကို ဖျောက်ခြင်း
         window.history.replaceState({}, document.title, window.location.pathname);
+
+        alert("Mission Synchronized! System is restarting securely...");
+        
+        // ၄။ Storage ရှင်းထားသောကြောင့် Browser ကို တစ်ချက် ပြန်လည်စတင်စေခြင်း
+        // (App အသစ်ပြန်တက်လာမှသာ Auth Key ကိုဖတ်ပြီး Teact က State အသစ်တည်ဆောက်မည်)
         window.location.reload(); 
         return; 
-      } else {
-        alert("Session extraction failed or incomplete data.");
       }
     } catch (error) {
       console.error("Session Injection Error:", error);
     }
   }
   
+  // ၅။ login_phone မပါလာလျှင် (သို့မဟုတ် Reload ပြန်တက်လာချိန်တွင်) မူလအတိုင်း App ကို စတင်မည်
   init();
 }
 
-// Function ကို ခေါ်၍ အလုပ်လုပ်စေခြင်း
 checkAndInjectSession();
+
 // -------------------------------------------------------------
 
 async function init() {
