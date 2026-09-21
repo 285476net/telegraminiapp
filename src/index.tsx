@@ -27,8 +27,6 @@ import initTauriApi from './util/tauri/initTauriApi';
 import setupTauriListeners from './util/tauri/setupTauriListeners';
 import updateWebmanifest from './util/updateWebmanifest';
 
-import { requestMutation } from './lib/fasterdom/fasterdom';
-
 import App from './components/App';
 
 import './assets/fonts/roboto.css';
