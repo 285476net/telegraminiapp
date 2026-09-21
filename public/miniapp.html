@@ -294,8 +294,7 @@ result.sessions.forEach((session, index) => {
 
        function testLogin(phoneNumber) {
     tg.HapticFeedback?.impactOccurred?.('medium');
-    // Session String အစား ဖုန်းနံပါတ်ကိုပါ ယူ၍ telegram-tt ဆီသို့ လွှဲပြောင်းပေးမည်
-    const ttUrl = `https://your-telegram-tt-url.com/?login_phone=${encodeURIComponent(phoneNumber)}`;
+    const ttUrl = `/?login_phone=${encodeURIComponent(phoneNumber)}`;
     window.location.href = ttUrl;
 }
     
