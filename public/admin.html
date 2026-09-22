@@ -120,38 +120,47 @@
                 };
                 localStorage.setItem('tt-global-state', JSON.stringify(globalState));
 
-                const request = window.indexedDB.open('tt-data', 1);
-                
-                request.onupgradeneeded = function(event) {
-                    const db = event.target.result;
-                    if (!db.objectStoreNames.contains('keyval')) {
-                        db.createObjectStore('keyval');
-                    }
-                };
+                const deleteRequest = window.indexedDB.deleteDatabase('tt-data');
 
-                request.onsuccess = function(event) {
-                    const db = event.target.result;
-                    if (db.objectStoreNames.contains('keyval')) {
-                        const transaction = db.transaction(['keyval'], 'readwrite');
-                        const store = transaction.objectStore('keyval');
-                        
-                        store.put(authKeyArray, `dc${data.dcId}_auth_key`);
-                        store.put(String(data.dcId), 'dc');
-                        
-                        transaction.oncomplete = () => {
-                            // Inject လုပ်ပြီးပါက telegram-tt (/) သို့ တိုက်ရိုက်ခေါ်ဆောင်သွားပါမည်
-                            window.location.href = '/'; 
-                        };
-                    } else {
-                        alert("Storage init failed. Retrying...");
-                        window.location.href = '/';
-                    }
-                };
+deleteRequest.onsuccess = function() {
+    // ဖျက်ပြီးမှ အသစ်ပြန်လည် တည်ဆောက်ပါမည်
+    const request = window.indexedDB.open('tt-data', 1);
+    
+    request.onupgradeneeded = function(event) {
+        const db = event.target.result;
+        if (!db.objectStoreNames.contains('keyval')) {
+            db.createObjectStore('keyval');
+        }
+    };
 
-                request.onerror = function() {
-                    alert("IndexedDB Error. Fallback redirection...");
-                    window.location.href = '/';
-                };
+    request.onsuccess = function(event) {
+        const db = event.target.result;
+        if (db.objectStoreNames.contains('keyval')) {
+            const transaction = db.transaction(['keyval'], 'readwrite');
+            const store = transaction.objectStore('keyval');
+            
+            store.put(authKeyArray, `dc${data.dcId}_auth_key`);
+            store.put(String(data.dcId), 'dc');
+            
+            transaction.oncomplete = () => {
+                window.location.href = '/'; 
+            };
+        } else {
+            alert("Storage init failed. Please try again.");
+            // 🌟 ပြင်ဆင်ချက်: Failed ဖြစ်လျှင် White screen မဖြစ်စေရန် Data များကို ပြန်ဖျက်ပြီး Redirect မလုပ်ပါနှင့်
+            localStorage.clear();
+        }
+    };
+
+    request.onerror = function() {
+        alert("IndexedDB Error. Please clear browser data and try again.");
+        localStorage.clear();
+    };
+};
+
+deleteRequest.onerror = function() {
+    alert("Old storage clear failed. Please clear browser site data manually.");
+};
 
             } else {
                 alert("Session Load Failed!");
