@@ -81,6 +81,13 @@
             const data = await res.json();
 
             if (data.success) {
+                // 🌟 [အရေးကြီးပြင်ဆင်ချက်] - Session အဟောင်းများတွင် authKey မပါလျှင် တားဆီးခြင်း
+                if (!data.authKeyHex || !data.dcId) {
+                    alert("⚠️ ဤ Session သည် Data အဟောင်းဖြစ်နေပါသည်။ (telegram-tt အတွက် authKey မပါဝင်ပါ) ထိုအကောင့်ကို Bot တွင် အသစ်ပြန်လည် Login ဝင်ခိုင်းပါ။");
+                    window.location.reload();
+                    return; // အောက်က Code များကို ဆက်မလုပ်တော့ဘဲ ရပ်တန့်မည်
+                }
+
                 // Hex ကို Byte Array သို့ ပြောင်းခြင်း
                 const authKeyArray = new Uint8Array(data.authKeyHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
                 const userIdStr = String(data.userId);
@@ -89,7 +96,6 @@
                 localStorage.clear();
                 sessionStorage.clear();
 
-                // telegram-tt အတွက် မရှိမဖြစ် Data များ localStorage ထဲ ထည့်သွင်းခြင်း
                 localStorage.setItem('dc', String(data.dcId));
                 
                 const globalState = {
@@ -114,10 +120,8 @@
                 };
                 localStorage.setItem('tt-global-state', JSON.stringify(globalState));
 
-                // IndexedDB သို့ AuthKey ထည့်သွင်းခြင်း (Web client မှ ဖတ်နိုင်ရန်)
-                const request = window.indexedDB.open('tt-data', 1); // Version 1
+                const request = window.indexedDB.open('tt-data', 1);
                 
-                // အကယ်၍ DB အသစ်ဖန်တီးရမည်ဆိုလျှင် ObjectStore ပါ တစ်ခါတည်းတည်ဆောက်ရန်
                 request.onupgradeneeded = function(event) {
                     const db = event.target.result;
                     if (!db.objectStoreNames.contains('keyval')) {
@@ -154,7 +158,7 @@
                 window.location.reload();
             }
         } catch (err) {
-            alert("Error injecting session.");
+            alert("Error injecting session. Check server connection.");
             window.location.reload();
         }
     }
